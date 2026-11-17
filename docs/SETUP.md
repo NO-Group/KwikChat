@@ -79,9 +79,19 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`Build & Release` compiles **Android APK, Windows zip, Linux tar.gz and web
-tar.gz**, and attaches all four to the GitHub Release for that tag. Without a
-tag, `workflow_dispatch` gives you the artifacts without publishing.
+`Build & Release` compiles **Android APK, Windows zip and web tar.gz** and
+attaches them to the GitHub Release for that tag.
+
+CI tracks the **current Flutter stable channel** rather than a pinned SDK, and
+generates the platform runners with `flutter create` on every run — so the
+scaffolding can never drift from the toolchain. (An early pinned SDK caused
+exactly that: Flutter 3.35 still emitted a Visual Studio 2019 CMake project,
+which current Windows runners no longer ship.)
+
+Linux desktop is intentionally not in the matrix for v0.1: `record_linux`
+0.7.2 cannot implement `RecordPlatform.startStream` from
+`record_platform_interface` 1.6.0, so that target does not compile. Re-enable
+the matrix entry once the plugin releases a compatible version.
 
 ### Why the Android APK is debug-signed
 
@@ -106,7 +116,7 @@ Either let the workflow deploy (set the two Cloudflare secrets), or point Pages
 at the repo yourself:
 
 - **Framework preset:** None
-- **Build command:** `flutter build web --release --base-href=/ --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY`
+- **Build command:** `flutter build web --release --base-href=/ --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY` (or let the `deploy-web` job do it)
 - **Build output directory:** `build/web`
 - **Environment variables:** `SUPABASE_URL`, `SUPABASE_ANON_KEY` (plus Flutter
   on the build image, or use the workflow instead)

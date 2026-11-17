@@ -6,7 +6,7 @@
 
 **Fast, light, privacy-first messaging and communities — built for Nigerian networks.**
 
-Flutter · one codebase → Web, Android, iOS, Windows, Linux
+Flutter · one codebase → Web, Android, Windows (+ iOS via macOS build)
 
 </div>
 
@@ -42,7 +42,13 @@ stubbed playback) and are sequenced for v0.2.
      --dart-define=SUPABASE_ANON_KEY=eyJ...
    ```
 3. **Ship:** `git tag v0.1.0 && git push origin v0.1.0` → Android APK, Windows
-   zip, Linux tarball and the web bundle appear on your **Releases** page.
+   zip and the web bundle appear on your **Releases** page.
+
+**Platform notes.** Web, Android and Windows are verified building in CI.
+iOS needs a macOS runner plus your signing identity — no Linux machine can
+produce it (`docs/SETUP.md` §3). Linux desktop is parked for v0.1 because
+`record_linux` 0.7.2 no longer implements `RecordPlatform.startStream`; Windows
+and the web build cover desktop users until that plugin catches up.
 
 ## Why the architecture looks like this
 
@@ -98,7 +104,7 @@ web/                        PWA shell, manifest, icons
 
 - **v0.2** — Reels playback (HLS ladder + 480p data-saver rendition), LiveKit
   Yarn Rooms, vendor profiles and commerce hooks, store-compliant Cowrie
-  purchase sheet.
+  purchase sheet, Linux desktop once `record_linux` is compatible.
 - **v0.3** — E2EE with a written threat model, R2 media with participant-scoped
   presigning, push notifications (FCM/APNs), Pidgin/Yoruba/Hausa/Igbo
   transcription.

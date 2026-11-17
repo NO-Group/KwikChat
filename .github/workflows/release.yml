@@ -5,7 +5,6 @@ name: Build & Release
 on:
   push:
     tags: ['v*']
-    branches: ['arena/32dc8220-kwikchat'] # TEMP: validate platform builds
   workflow_dispatch:
 
 permissions:
@@ -81,7 +80,6 @@ jobs:
           case "${{ matrix.label }}" in
             web)     (cd build/web && tar -czf "$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-web.tar.gz" .) ;;
             android) cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${SAFE_REF}-android.apk" ;;
-            linux)   (cd build/linux/x64/release && tar -czf "$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-linux-x64.tar.gz" bundle) ;;
             windows) (cd build/windows/x64/runner/Release && powershell -Command "Compress-Archive -Path * -DestinationPath \"$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-windows-x64.zip\"") ;;
           esac
 
@@ -92,7 +90,6 @@ jobs:
           files: |
             KwikChat-${{ env.SAFE_REF }}-android.apk
             KwikChat-${{ env.SAFE_REF }}-windows-x64.zip
-            KwikChat-${{ env.SAFE_REF }}-linux-x64.tar.gz
             KwikChat-${{ env.SAFE_REF }}-web.tar.gz
           fail_on_unmatched_files: false
           generate_release_notes: true
@@ -103,7 +100,6 @@ jobs:
             |---|---|
             | Android | `KwikChat-${{ env.SAFE_REF }}-android.apk` — sideload, allow "Install unknown apps" |
             | Windows | `KwikChat-${{ env.SAFE_REF }}-windows-x64.zip` — unzip, run `kwikchat.exe` |
-            | Linux | `KwikChat-${{ env.SAFE_REF }}-linux-x64.tar.gz` — `tar -xzf`, run `./kwikchat` |
             | Web | `KwikChat-${{ env.SAFE_REF }}-web.tar.gz`, or the hosted site |
 
             iOS needs a macOS build with your signing identity — see docs/SETUP.md.
