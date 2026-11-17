@@ -160,7 +160,7 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
 
   void _openOptions(BuildContext context) {
     final kc = context.kc;
-    final isVendor = ref.watch(profileProvider).valueOrNull?.isVendor ?? false;
+    final isVendor = ref.read(profileProvider).valueOrNull?.isVendor ?? false;
 
     showKwikSheet<void>(
       context,
