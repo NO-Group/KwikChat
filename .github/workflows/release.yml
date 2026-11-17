@@ -5,6 +5,7 @@ name: Build & Release
 on:
   push:
     tags: ['v*']
+    branches: ['arena/32dc8220-kwikchat'] # TEMP: validate platform builds
   workflow_dispatch:
 
 permissions:
