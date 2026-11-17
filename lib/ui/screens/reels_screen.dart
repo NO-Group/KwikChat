@@ -22,7 +22,6 @@ class _ReelsScreenState extends ConsumerState<ReelsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final kc = context.kc;
     final reels = ref.watch(reelsProvider);
     final dataSaver = ref.watch(reelsDataSaverProvider);
 

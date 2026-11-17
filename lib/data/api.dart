@@ -103,7 +103,7 @@ class KwikApi {
 
   Future<void> verifyEmailCode({required String email, required String code}) async {
     try {
-      await _client.auth.verifyOtp(email: email.trim(), token: code.trim(), type: OtpType.email);
+      await _client.auth.verifyOTP(email: email.trim(), token: code.trim(), type: OtpType.email);
     } catch (e) {
       throw _map(e);
     }

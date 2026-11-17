@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/env.dart';
 import '../../state/providers.dart';
 import '../../theme/kwik_theme.dart';
+import '../widgets/common.dart';
 import 'app_shell.dart';
 import 'claim_username_screen.dart';
 import 'onboarding_screen.dart';
