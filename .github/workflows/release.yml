@@ -93,6 +93,8 @@ jobs:
             KwikChat-${{ env.SAFE_REF }}-web.tar.gz
           fail_on_unmatched_files: false
           generate_release_notes: true
+          # tags like v0.1.0-preview.1 publish as pre-releases, not as the real thing
+          prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
             **KwikChat ${{ github.ref_name }}**
 
