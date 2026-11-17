@@ -25,7 +25,6 @@ jobs:
         run: flutter create --project-name kwikchat --org ng.kwikchat --platforms=web,android .
 
       - run: flutter pub get
-      - run: dart run flutter_launcher_icons
 
       # Captured to a file so failures can be reported somewhere reachable by
       # tooling (and pasted into a fix), not just buried in the job log.

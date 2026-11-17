@@ -47,7 +47,13 @@ jobs:
         run: flutter pub get
 
       - name: Apply brand icons
-        run: dart run flutter_launcher_icons
+        shell: bash
+        run: |
+          case "${{ matrix.label }}" in
+            android) dart run flutter_launcher_icons -f icons/android.yaml ;;
+            windows) dart run flutter_launcher_icons -f icons/windows.yaml ;;
+            *) echo "web icons are committed in web/icons" ;;
+          esac
 
       - name: Linux build dependencies
         if: matrix.label == 'linux'
@@ -65,9 +71,9 @@ jobs:
             web)
               flutter build web --release --base-href=/ $DEFINES 2>&1 | tee -a build.log ;;
             android)
-              flutter build apk --release $DEFINES 2>&1 | tee -a build.log || {
+              flutter build apk --release --split-per-abi $DEFINES 2>&1 | tee -a build.log || {
                 echo "=== verbose retry (diagnostics) ===" | tee -a build.log
-                flutter build apk --release --verbose $DEFINES 2>&1 | tail -n 250 | tee -a build.log
+                flutter build apk --release --split-per-abi --verbose $DEFINES 2>&1 | tail -n 250 | tee -a build.log
                 exit 1
               } ;;
             windows)
@@ -82,7 +88,11 @@ jobs:
           echo "SAFE_REF=$SAFE_REF" >> "$GITHUB_ENV"
           case "${{ matrix.label }}" in
             web)     (cd build/web && tar -czf "$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-web.tar.gz" .) ;;
-            android) cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${SAFE_REF}-android.apk" ;;
+            android)
+              APK_DIR=build/app/outputs/flutter-apk
+              cp "$APK_DIR/app-arm64-v8a-release.apk" "KwikChat-${SAFE_REF}-android-arm64.apk"
+              cp "$APK_DIR/app-armeabi-v7a-release.apk" "KwikChat-${SAFE_REF}-android-arm32.apk"
+              ;;
             windows) (cd build/windows/x64/runner/Release && powershell -Command "Compress-Archive -Path * -DestinationPath \"$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-windows-x64.zip\"") ;;
           esac
 
@@ -91,7 +101,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            KwikChat-${{ env.SAFE_REF }}-android.apk
+            KwikChat-${{ env.SAFE_REF }}-android-arm64.apk
+            KwikChat-${{ env.SAFE_REF }}-android-arm32.apk
             KwikChat-${{ env.SAFE_REF }}-windows-x64.zip
             KwikChat-${{ env.SAFE_REF }}-web.tar.gz
           fail_on_unmatched_files: false
@@ -103,7 +114,8 @@ jobs:
 
             | Platform | Download |
             |---|---|
-            | Android | `KwikChat-${{ env.SAFE_REF }}-android.apk` — sideload, allow "Install unknown apps" |
+            | Android (most phones) | `KwikChat-${{ env.SAFE_REF }}-android-arm64.apk` — sideload, allow "Install unknown apps" |
+            | Android (older 32-bit) | `KwikChat-${{ env.SAFE_REF }}-android-arm32.apk` |
             | Windows | `KwikChat-${{ env.SAFE_REF }}-windows-x64.zip` — unzip, run `kwikchat.exe` |
             | Web | `KwikChat-${{ env.SAFE_REF }}-web.tar.gz`, or the hosted site |
 
@@ -129,23 +141,31 @@ jobs:
     needs: build
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
+      - name: Skip when Cloudflare is not configured
+        if: env.CF_API_TOKEN == ''
+        run: echo "No CLOUDFLARE_API_TOKEN secret — skipping Pages deploy."
       - uses: actions/checkout@v4
+        if: env.CF_API_TOKEN != ''
       - uses: subosito/flutter-action@v2
+        if: env.CF_API_TOKEN != ''
         with:
           channel: stable
           cache: true
       - name: Build web
+        if: env.CF_API_TOKEN != ''
         run: |
           flutter create --project-name kwikchat --org ng.kwikchat --platforms=web .
           flutter pub get
-          dart run flutter_launcher_icons
           flutter build web --release --base-href=/ \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Publish to Pages
+        if: env.CF_API_TOKEN != ''
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
