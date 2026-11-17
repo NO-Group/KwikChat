@@ -141,35 +141,33 @@ jobs:
     needs: build
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
-    env:
-      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
-      - name: Skip when Cloudflare is not configured
-        if: env.CF_API_TOKEN == ''
-        run: echo "No CLOUDFLARE_API_TOKEN secret — skipping Pages deploy."
       - uses: actions/checkout@v4
-        if: env.CF_API_TOKEN != ''
+
       - uses: subosito/flutter-action@v2
-        if: env.CF_API_TOKEN != ''
         with:
           channel: stable
           cache: true
-      - name: Build web
-        if: env.CF_API_TOKEN != ''
+
+      # One guarded step: if the Cloudflare secrets are absent the job succeeds
+      # and says so, rather than failing the whole release.
+      - name: Build and publish
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ACCOUNT_ID" ]; then
+            echo "Cloudflare secrets not set — skipping Pages deploy (release is unaffected)."
+            exit 0
+          fi
           flutter create --project-name kwikchat --org ng.kwikchat --platforms=web .
           flutter pub get
           flutter build web --release --base-href=/ \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Publish to Pages
-        if: env.CF_API_TOKEN != ''
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: kwikchat
-          directory: build/web
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          npx --yes wrangler@3 pages deploy build/web \
+            --project-name=kwikchat \
+            --branch="${GITHUB_REF_NAME}" \
+            --commit-dirty=true
