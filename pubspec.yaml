@@ -1,0 +1,29 @@
+name: kwikchat
+description: KwikChat — lightweight, privacy-first social messaging built for Nigerian networks and devices.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  supabase_flutter: ^2.5.0
+  shared_preferences: ^2.2.3
+  record: ^5.1.2
+  just_audio: ^0.9.40
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  web: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/kwikchat_logo.png

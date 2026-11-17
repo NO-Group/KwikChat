@@ -1,0 +1,12 @@
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    avoid_print: true
+    use_super_parameters: true
+
+analyzer:
+  errors:
+    # Keep CI strict on things that actually break builds.
+    invalid_annotation_target: ignore
