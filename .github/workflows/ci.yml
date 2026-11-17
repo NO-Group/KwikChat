@@ -5,6 +5,10 @@ on:
     branches: ['**']
   pull_request:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   analyze:
     name: Analyze & test
@@ -22,12 +26,37 @@ jobs:
         run: flutter create --project-name kwikchat --org ng.kwikchat --platforms=web,android .
 
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
-      - run: flutter test --reporter expanded
-        continue-on-error: true
+
+      # Captured to a file so failures can be reported somewhere reachable by
+      # tooling (and pasted into a fix), not just buried in the job log.
+      - name: Analyze
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos 2>&1 | tee analyze.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Test
+        run: flutter test --reporter expanded
 
       - name: Build web (smoke test)
         run: >
           flutter build web --release
           --dart-define=SUPABASE_URL=https://example.supabase.co
           --dart-define=SUPABASE_ANON_KEY=ci-placeholder-key-000000000000000000
+
+      - name: Report analyzer output
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s analyze.log ]; then echo "no analyze.log (failed before analyze)"; exit 0; fi
+          header="CI report for \`$GITHUB_SHA\` on \`$GITHUB_REF_NAME\` — run $GITHUB_RUN_ID"
+          { echo "$header"; echo; echo '```'; head -c 50000 analyze.log; echo '```'; } > body.md
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=ci-report" --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$existing" ] || [ "$existing" = "null" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues" -F title="CI analyze report" -F body=@body.md -f "labels[]=ci-report" >/dev/null \
+              || echo "could not create issue (issues disabled?)"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$existing/comments" -F body=@body.md >/dev/null \
+              || echo "could not comment on issue"
+          fi
