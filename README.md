@@ -26,7 +26,8 @@ stubbed playback) and are sequenced for v0.2.
 | Chats — 1:1 threads, voice notes, offline cache, order tags | ✅ working |
 | Identity — email OTP → unique `@username`, privacy by default | ✅ working |
 | Cowries — ledger-backed balance, Paystack webhook, welcome bonus | ✅ backend working, purchase sheet pending (§9) |
-| `+Joints` — communities, Hype/Fade with server-ranked Hot feed | ✅ working |
+| `+Joints` — communities, Hype/Fade, server-ranked Hot feed, threaded comments | ✅ working |
+| Vendor tools — order status from inside the chat, "Message vendor" CTA | 🟡 order tags live, catalogue in v0.2 |
 | Reels — feed shell, data-saver toggle, vendor CTA | 🟡 shell (playback in v0.2) |
 | Yarn Rooms — live room list, hosts, listener counts | 🟡 shell (LiveKit in v0.2) |
 
@@ -41,8 +42,22 @@ stubbed playback) and are sequenced for v0.2.
      --dart-define=SUPABASE_URL=https://xxx.supabase.co \
      --dart-define=SUPABASE_ANON_KEY=eyJ...
    ```
-3. **Ship:** `git tag v0.1.0 && git push origin v0.1.0` → Android APK, Windows
-   zip and the web bundle appear on your **Releases** page.
+3. **Ship:** `git tag v0.1.0 && git push origin v0.1.0` → installers appear on
+   your **Releases** page.
+
+### What a release contains
+
+| Asset | Size | Who it's for |
+|---|---|---|
+| `…-android-arm64.apk` | ~18 MB | almost every modern phone |
+| `…-android-arm32.apk` | ~16 MB | older 32-bit budget devices |
+| `…-windows-x64.zip` | ~12 MB | PC: unzip and run `kwikchat.exe` |
+| `…-web.tar.gz` | ~14 MB | static host (Cloudflare Pages deploys this automatically) |
+
+Apps are built **per ABI**: a universal APK was 48 MB, which is indefensible for
+an app whose whole pitch is being light on a 2 GB phone on a metered connection.
+Tags containing a hyphen (e.g. `v0.1.0-preview.2`) publish as pre-releases, so a
+preview never masquerades as the real version.
 
 **Platform notes.** Web, Android and Windows are verified building in CI.
 iOS needs a macOS runner plus your signing identity — no Linux machine can

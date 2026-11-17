@@ -79,8 +79,15 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`Build & Release` compiles **Android APK, Windows zip and web tar.gz** and
-attaches them to the GitHub Release for that tag.
+`Build & Release` compiles **arm64 + arm32 Android APKs, a Windows zip and a web
+tar.gz**, and attaches them to the GitHub Release for that tag. Tags with a
+hyphen (`v0.1.0-preview.1`) are published as pre-releases.
+
+App icons are generated from `assets/kwikchat_logo.png` during the build
+(`icons/android.yaml`, `icons/windows.yaml`, `icons/ios.yaml`) using
+`flutter_launcher_icons`, because the platform folders themselves are generated.
+Icons are configured per platform on purpose: a single global config makes the
+tool look for folders a given job never created, which fails the build.
 
 CI tracks the **current Flutter stable channel** rather than a pinned SDK, and
 generates the platform runners with `flutter create` on every run — so the
@@ -111,6 +118,11 @@ Home Screen**, which is the honest v0.1 answer for iOS.
 ---
 
 ## 4. Cloudflare Pages (`kwikchat.no-group.org`)
+
+The `deploy-web` job publishes with `wrangler pages deploy` when both
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets exist, and prints a
+skip notice (exit 0) when they don't — so an unconfigured Cloudflare never
+breaks a release.
 
 Either let the workflow deploy (set the two Cloudflare secrets), or point Pages
 at the repo yourself:
