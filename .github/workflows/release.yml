@@ -115,7 +115,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ ! -s build.log ]; then echo "no build.log — failed before the build step"; exit 0; fi
-          { echo "Build failure: **${{ matrix.label }}** for \`$GITHUB_SHA\` (run $GITHUB_RUN_ID)"; echo; echo '```'; head -c 40000 build.log; echo '```'; } > body.md
+          { echo "Build failure: **${{ matrix.label }}** for \`$GITHUB_SHA\` (run $GITHUB_RUN_ID)"; echo; echo '```'; tail -c 40000 build.log; echo '```'; } > body.md
           existing=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=ci-report" --jq '.[0].number' 2>/dev/null || true)
           if [ -z "$existing" ] || [ "$existing" = "null" ]; then
             gh api "repos/$GITHUB_REPOSITORY/issues" -F title="CI analyze report" -F body=@body.md -f "labels[]=ci-report" >/dev/null || true
