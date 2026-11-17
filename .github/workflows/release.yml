@@ -13,7 +13,7 @@ permissions:
   issues: write
 
 env:
-  FLUTTER_VERSION: '3.35.4'
+  FLUTTER_CHANNEL: stable
 
 jobs:
   build:
@@ -25,7 +25,11 @@ jobs:
         include:
           - { os: ubuntu-latest,  label: web,     artifact: web }
           - { os: ubuntu-latest,  label: android, artifact: apk }
-          - { os: ubuntu-latest,  label: linux,   artifact: linux }
+          # Linux: parked for v0.1. record_linux 0.7.2 does not implement
+          # RecordPlatform.startStream from record_platform_interface 1.6.0,
+          # so the desktop Linux build cannot compile until that plugin lands
+          # a compatible release. Windows covers desktop users meanwhile.
+          # - { os: ubuntu-latest,  label: linux,   artifact: linux }
           - { os: windows-latest, label: windows, artifact: windows }
 
     steps:
@@ -34,8 +38,7 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
+          channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
 
       - name: Generate platform scaffolding
@@ -55,21 +58,31 @@ jobs:
         run: |
           set -o pipefail
           DEFINES="--dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} --dart-define=APP_VERSION=${{ github.ref_name }}"
+          flutter --version 2>&1 | tee build.log
           case "${{ matrix.label }}" in
-            web)     flutter build web --release --base-href=/ $DEFINES ;;
-            android) flutter build apk --release $DEFINES ;;
-            linux)   flutter build linux --release $DEFINES ;;
-            windows) flutter build windows --release $DEFINES ;;
-          esac 2>&1 | tee build.log
+            web)
+              flutter build web --release --base-href=/ $DEFINES 2>&1 | tee -a build.log ;;
+            android)
+              flutter build apk --release $DEFINES 2>&1 | tee -a build.log || {
+                echo "=== verbose retry (diagnostics) ===" | tee -a build.log
+                flutter build apk --release --verbose $DEFINES 2>&1 | tail -n 250 | tee -a build.log
+                exit 1
+              } ;;
+            windows)
+              flutter build windows --release $DEFINES 2>&1 | tee -a build.log ;;
+          esac
 
       - name: Package
         shell: bash
         run: |
+          # Branch names contain "/" — never use them raw in a filename.
+          SAFE_REF=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
+          echo "SAFE_REF=$SAFE_REF" >> "$GITHUB_ENV"
           case "${{ matrix.label }}" in
-            web)     (cd build/web && tar -czf "$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-web.tar.gz" .) ;;
-            android) cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${GITHUB_REF_NAME}-android.apk" ;;
-            linux)   (cd build/linux/x64/release && tar -czf "$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-linux-x64.tar.gz" bundle) ;;
-            windows) (cd build/windows/x64/runner/Release && powershell -Command "Compress-Archive -Path * -DestinationPath \"$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-windows-x64.zip\"") ;;
+            web)     (cd build/web && tar -czf "$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-web.tar.gz" .) ;;
+            android) cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${SAFE_REF}-android.apk" ;;
+            linux)   (cd build/linux/x64/release && tar -czf "$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-linux-x64.tar.gz" bundle) ;;
+            windows) (cd build/windows/x64/runner/Release && powershell -Command "Compress-Archive -Path * -DestinationPath \"$GITHUB_WORKSPACE/KwikChat-${SAFE_REF}-windows-x64.zip\"") ;;
           esac
 
       - name: Attach to GitHub Release
@@ -77,10 +90,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            KwikChat-${{ github.ref_name }}-android.apk
-            KwikChat-${{ github.ref_name }}-windows-x64.zip
-            KwikChat-${{ github.ref_name }}-linux-x64.tar.gz
-            KwikChat-${{ github.ref_name }}-web.tar.gz
+            KwikChat-${{ env.SAFE_REF }}-android.apk
+            KwikChat-${{ env.SAFE_REF }}-windows-x64.zip
+            KwikChat-${{ env.SAFE_REF }}-linux-x64.tar.gz
+            KwikChat-${{ env.SAFE_REF }}-web.tar.gz
           fail_on_unmatched_files: false
           generate_release_notes: true
           body: |
@@ -88,10 +101,10 @@ jobs:
 
             | Platform | Download |
             |---|---|
-            | Android | `KwikChat-${{ github.ref_name }}-android.apk` — sideload, allow "Install unknown apps" |
-            | Windows | `KwikChat-${{ github.ref_name }}-windows-x64.zip` — unzip, run `kwikchat.exe` |
-            | Linux | `KwikChat-${{ github.ref_name }}-linux-x64.tar.gz` — `tar -xzf`, run `./kwikchat` |
-            | Web | `KwikChat-${{ github.ref_name }}-web.tar.gz`, or the hosted site |
+            | Android | `KwikChat-${{ env.SAFE_REF }}-android.apk` — sideload, allow "Install unknown apps" |
+            | Windows | `KwikChat-${{ env.SAFE_REF }}-windows-x64.zip` — unzip, run `kwikchat.exe` |
+            | Linux | `KwikChat-${{ env.SAFE_REF }}-linux-x64.tar.gz` — `tar -xzf`, run `./kwikchat` |
+            | Web | `KwikChat-${{ env.SAFE_REF }}-web.tar.gz`, or the hosted site |
 
             iOS needs a macOS build with your signing identity — see docs/SETUP.md.
 
@@ -119,7 +132,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.4'
           channel: stable
           cache: true
       - name: Build web
