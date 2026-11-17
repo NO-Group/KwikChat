@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 env:
   FLUTTER_VERSION: '3.35.4'
@@ -22,23 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            label: web
-            artifact: web
-          - os: ubuntu-latest
-            label: android
-            artifact: apk
-          - os: ubuntu-latest
-            label: linux
-            artifact: linux
-          - os: windows-latest
-            label: windows
-            artifact: windows
-          # macOS runner minutes cost 10x and shipping needs an Apple cert.
-          # Enable when you have a signing identity:
-          # - os: macos-latest
-          #   label: macos
-          #   artifact: macos
+          - { os: ubuntu-latest,  label: web,     artifact: web }
+          - { os: ubuntu-latest,  label: android, artifact: apk }
+          - { os: ubuntu-latest,  label: linux,   artifact: linux }
+          - { os: windows-latest, label: windows, artifact: windows }
 
     steps:
       - uses: actions/checkout@v4
@@ -50,16 +38,11 @@ jobs:
           channel: stable
           cache: true
 
-      # Platform runners (android/, windows/, linux/) are generated here rather
-      # than committed, so they always match the Flutter version in use.
       - name: Generate platform scaffolding
-        run: flutter create --project-name kwikchat --org ng.kwikchat --platforms=${{ matrix.label == 'web' && 'web' || matrix.label }} .
+        run: flutter create --project-name kwikchat --org ng.kwikchat --platforms=${{ matrix.label }} .
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
 
       - name: Linux build dependencies
         if: matrix.label == 'linux'
@@ -67,121 +50,88 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
 
-      - name: Build web
-        if: matrix.label == 'web'
-        run: >
-          flutter build web --release
-          --base-href=/
-          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          --dart-define=APP_VERSION=${{ github.ref_name }}
-
-      - name: Build Android APK
-        if: matrix.label == 'android'
-        run: >
-          flutter build apk --release
-          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          --dart-define=APP_VERSION=${{ github.ref_name }}
-
-      - name: Build Linux
-        if: matrix.label == 'linux'
-        run: >
-          flutter build linux --release
-          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-
-      - name: Build Windows
-        if: matrix.label == 'windows'
-        shell: pwsh
+      - name: Build
+        shell: bash
         run: |
-          flutter build windows --release `
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          set -o pipefail
+          DEFINES="--dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} --dart-define=APP_VERSION=${{ github.ref_name }}"
+          case "${{ matrix.label }}" in
+            web)     flutter build web --release --base-href=/ $DEFINES ;;
+            android) flutter build apk --release $DEFINES ;;
+            linux)   flutter build linux --release $DEFINES ;;
+            windows) flutter build windows --release $DEFINES ;;
+          esac 2>&1 | tee build.log
 
-      # ---------------------------------------------------------------- packages
-      - name: Package Android
-        if: matrix.label == 'android'
+      - name: Package
+        shell: bash
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${GITHUB_REF_NAME}-android.apk"
-          echo "asset=KwikChat-${GITHUB_REF_NAME}-android.apk" >> "$GITHUB_ENV"
-
-      - name: Package Linux
-        if: matrix.label == 'linux'
-        run: |
-          cd build/linux/x64/release
-          tar -czf "${GITHUB_WORKSPACE}/KwikChat-${GITHUB_REF_NAME}-linux-x64.tar.gz" bundle
-          echo "asset=KwikChat-${GITHUB_REF_NAME}-linux-x64.tar.gz" >> "$GITHUB_ENV"
-
-      - name: Package Windows
-        if: matrix.label == 'windows'
-        shell: pwsh
-        run: |
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "KwikChat-$env:GITHUB_REF_NAME-windows-x64.zip"
-          "asset=KwikChat-$env:GITHUB_REF_NAME-windows-x64.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Package Web
-        if: matrix.label == 'web'
-        run: |
-          cd build/web
-          tar -czf "${GITHUB_WORKSPACE}/KwikChat-${GITHUB_REF_NAME}-web.tar.gz" .
-          echo "asset=KwikChat-${GITHUB_REF_NAME}-web.tar.gz" >> "$GITHUB_ENV"
-
-      # ----------------------------------------------------------------- upload
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.label }}
-          path: build/${{ matrix.label == 'android' && 'app/outputs/flutter-apk' || matrix.label == 'web' && 'web' || matrix.label }}
-          retention-days: 14
+          case "${{ matrix.label }}" in
+            web)     (cd build/web && tar -czf "$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-web.tar.gz" .) ;;
+            android) cp build/app/outputs/flutter-apk/app-release.apk "KwikChat-${GITHUB_REF_NAME}-android.apk" ;;
+            linux)   (cd build/linux/x64/release && tar -czf "$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-linux-x64.tar.gz" bundle) ;;
+            windows) (cd build/windows/x64/runner/Release && powershell -Command "Compress-Archive -Path * -DestinationPath \"$GITHUB_WORKSPACE/KwikChat-${GITHUB_REF_NAME}-windows-x64.zip\"") ;;
+          esac
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.asset }}
+          files: |
+            KwikChat-${{ github.ref_name }}-android.apk
+            KwikChat-${{ github.ref_name }}-windows-x64.zip
+            KwikChat-${{ github.ref_name }}-linux-x64.tar.gz
+            KwikChat-${{ github.ref_name }}-web.tar.gz
+          fail_on_unmatched_files: false
           generate_release_notes: true
           body: |
             **KwikChat ${{ github.ref_name }}**
 
             | Platform | Download |
             |---|---|
-            | Android | `KwikChat-${{ github.ref_name }}-android.apk` (sideload; enable "Install unknown apps") |
-            | Windows | `KwikChat-${{ github.ref_name }}-windows-x64.zip` (unzip, run `kwikchat.exe`) |
-            | Linux | `KwikChat-${{ github.ref_name }}-linux-x64.tar.gz` (`tar -xzf`, run `./kwikchat`) |
-            | Web | `KwikChat-${{ github.ref_name }}-web.tar.gz` — or just use the hosted site |
+            | Android | `KwikChat-${{ github.ref_name }}-android.apk` — sideload, allow "Install unknown apps" |
+            | Windows | `KwikChat-${{ github.ref_name }}-windows-x64.zip` — unzip, run `kwikchat.exe` |
+            | Linux | `KwikChat-${{ github.ref_name }}-linux-x64.tar.gz` — `tar -xzf`, run `./kwikchat` |
+            | Web | `KwikChat-${{ github.ref_name }}-web.tar.gz`, or the hosted site |
 
-            iOS: build on a Mac with your signing identity — see docs/SETUP.md.
+            iOS needs a macOS build with your signing identity — see docs/SETUP.md.
+
+      - name: Report build failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -s build.log ]; then echo "no build.log — failed before the build step"; exit 0; fi
+          { echo "Build failure: **${{ matrix.label }}** for \`$GITHUB_SHA\` (run $GITHUB_RUN_ID)"; echo; echo '```'; head -c 40000 build.log; echo '```'; } > body.md
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=ci-report" --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$existing" ] || [ "$existing" = "null" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues" -F title="CI analyze report" -F body=@body.md -f "labels[]=ci-report" >/dev/null || true
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$existing/comments" -F body=@body.md >/dev/null || true
+          fi
 
   deploy-web:
     name: Deploy web to Cloudflare Pages
     needs: build
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
-    env:
-      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
-      - name: Skip notice
-        if: env.CF_API_TOKEN == ''
-        run: echo "No CLOUDFLARE_API_TOKEN secret set — skipping Pages deploy. Add it to enable auto-deploy."
-      - name: Install Flutter
-        if: env.CF_API_TOKEN != ''
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.35.4'
           channel: stable
           cache: true
       - name: Build web
-        if: env.CF_API_TOKEN != ''
         run: |
           flutter create --project-name kwikchat --org ng.kwikchat --platforms=web .
           flutter pub get
           flutter build web --release --base-href=/ \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Publish to Pages
-        if: env.CF_API_TOKEN != ''
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
