@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../state/providers.dart';
 import '../../theme/kwik_theme.dart';
 import '../widgets/common.dart';
+import 'post_screen.dart';
 
 class JointsScreen extends ConsumerWidget {
   const JointsScreen({super.key});
@@ -177,7 +178,7 @@ class _JointFeedScreenState extends ConsumerState<JointFeedScreen> {
             child: ListView.builder(
               padding: const EdgeInsets.only(top: 6, bottom: 20),
               itemCount: sorted.length,
-              itemBuilder: (context, i) => _PostCard(post: sorted[i]),
+              itemBuilder: (context, i) => _PostCard(post: sorted[i], jointTag: widget.joint.tag),
             ),
           );
         },
@@ -244,8 +245,9 @@ class _JointFeedScreenState extends ConsumerState<JointFeedScreen> {
 }
 
 class _PostCard extends ConsumerStatefulWidget {
-  const _PostCard({required this.post});
+  const _PostCard({required this.post, required this.jointTag});
   final JointPost post;
+  final String jointTag;
 
   @override
   ConsumerState<_PostCard> createState() => _PostCardState();
@@ -276,6 +278,11 @@ class _PostCardState extends ConsumerState<_PostCard> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: KwikCard(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PostScreen(post: post, jointTag: widget.jointTag),
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -314,7 +321,10 @@ class _PostCardState extends ConsumerState<_PostCard> {
                 const SizedBox(width: 12),
                 Icon(Icons.mode_comment_outlined, size: 14, color: kc.muted),
                 const SizedBox(width: 4),
-                Text('${post.commentCount}', style: TextStyle(color: kc.muted, fontSize: 11.5)),
+                Text(
+                  post.commentCount == 0 ? 'Comment' : '${post.commentCount}',
+                  style: TextStyle(color: kc.muted, fontSize: 11.5),
+                ),
               ],
             ),
           ],

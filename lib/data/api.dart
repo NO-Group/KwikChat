@@ -334,6 +334,27 @@ class KwikApi {
 
   // ------------------------------------------------------------ safety tools
 
+  /// Blocks by @username — the client never has the other user's id.
+  Future<void> blockByUsername(String username) async {
+    try {
+      await _client.rpc('block_user', params: {
+        'p_username': username.trim().toLowerCase().replaceFirst('@', ''),
+      });
+    } catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> unblockByUsername(String username) async {
+    try {
+      await _client.rpc('unblock_user', params: {
+        'p_username': username.trim().toLowerCase().replaceFirst('@', ''),
+      });
+    } catch (e) {
+      throw _map(e);
+    }
+  }
+
   Future<void> blockUser(String userId) async {
     final uid = currentUserId;
     if (uid == null) throw KwikError('not_authenticated');
@@ -426,6 +447,34 @@ class KwikApi {
         'author_id': uid,
         'title': title,
         'body': body,
+      });
+    } catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<List<JointComment>> fetchComments(String postId) async {
+    try {
+      final rows = await _client
+          .from('joint_comment_feed')
+          .select()
+          .eq('post_id', postId)
+          .order('created_at', ascending: true)
+          .limit(200);
+      return rows.map(JointComment.fromMap).toList(growable: false);
+    } catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> addComment({required String postId, required String body}) async {
+    final uid = currentUserId;
+    if (uid == null) throw KwikError('not_authenticated');
+    try {
+      await _client.from('joint_comments').insert({
+        'post_id': postId,
+        'author_id': uid,
+        'body': body.trim(),
       });
     } catch (e) {
       throw _map(e);

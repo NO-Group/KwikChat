@@ -23,6 +23,8 @@ class Profile {
     this.avatarPath,
     this.city = 'Jos',
     this.dataSaver = true,
+    this.isVendor = false,
+    this.isVerified = false,
   });
 
   final String id;
@@ -33,6 +35,8 @@ class Profile {
   final String city;
   final int cowriesBalance;
   final bool dataSaver;
+  final bool isVendor;
+  final bool isVerified;
 
   String get handle => '@$username';
   String get initials {
@@ -52,6 +56,8 @@ class Profile {
         city: _asString(m['city'], 'Jos'),
         cowriesBalance: _asInt(m['cowries_balance']),
         dataSaver: m['data_saver_mode'] as bool? ?? true,
+        isVendor: m['is_vendor'] as bool? ?? false,
+        isVerified: m['is_verified'] as bool? ?? false,
       );
 
   Profile copyWith({int? cowriesBalance, bool? dataSaver, String? displayName}) => Profile(
@@ -63,6 +69,8 @@ class Profile {
         city: city,
         cowriesBalance: cowriesBalance ?? this.cowriesBalance,
         dataSaver: dataSaver ?? this.dataSaver,
+        isVendor: isVendor,
+        isVerified: isVerified,
       );
 
   Map<String, dynamic> toJson() => {
@@ -74,6 +82,8 @@ class Profile {
         'city': city,
         'cowries_balance': cowriesBalance,
         'data_saver_mode': dataSaver,
+        'is_vendor': isVendor,
+        'is_verified': isVerified,
       };
 }
 
@@ -423,4 +433,28 @@ String formatTimeAgo(DateTime? when) {
   if (diff.inHours < 24) return '${diff.inHours}h';
   if (diff.inDays < 7) return '${diff.inDays}d';
   return '${when.day}/${when.month}';
+}
+
+class JointComment {
+  const JointComment({
+    required this.id,
+    required this.body,
+    required this.authorUsername,
+    required this.createdAt,
+    this.hypeCount = 0,
+  });
+
+  final String id;
+  final String body;
+  final String authorUsername;
+  final DateTime createdAt;
+  final int hypeCount;
+
+  factory JointComment.fromMap(Map<String, dynamic> m) => JointComment(
+        id: _asString(m['id']),
+        body: _asString(m['body']),
+        authorUsername: _asString(m['author_username']),
+        hypeCount: _asInt(m['hype_count']),
+        createdAt: _asDate(m['created_at']) ?? DateTime.now(),
+      );
 }

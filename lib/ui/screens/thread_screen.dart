@@ -31,6 +31,7 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   bool _canSend = false;
+  late OrderStatus _orderStatus = widget.orderStatus;
 
   @override
   void initState() {
@@ -95,12 +96,12 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
               widget.title,
               style: TextStyle(color: kc.text, fontSize: 15.5, fontWeight: FontWeight.w700, fontFamily: 'monospace'),
             ),
-            if (widget.orderStatus != OrderStatus.none)
+            if (_orderStatus != OrderStatus.none)
               Padding(
                 padding: const EdgeInsets.only(top: 3),
                 child: KwikPill(
-                  label: orderStatusLabel(widget.orderStatus),
-                  color: widget.orderStatus == OrderStatus.paid ? kc.accent : kc.info,
+                  label: orderStatusLabel(_orderStatus),
+                  color: _orderStatus == OrderStatus.paid ? kc.accent : kc.info,
                   filled: true,
                   icon: Icons.receipt_long,
                 ),
@@ -159,6 +160,8 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
 
   void _openOptions(BuildContext context) {
     final kc = context.kc;
+    final isVendor = ref.watch(profileProvider).valueOrNull?.isVendor ?? false;
+
     showKwikSheet<void>(
       context,
       Padding(
@@ -166,6 +169,19 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isVendor)
+              ListTile(
+                leading: Icon(Icons.receipt_long, color: kc.accent, size: 20),
+                title: Text('Order status', style: TextStyle(color: kc.text, fontSize: 14)),
+                subtitle: Text(
+                  _orderStatus == OrderStatus.none ? 'Not set' : orderStatusLabel(_orderStatus),
+                  style: TextStyle(color: kc.muted, fontSize: 11.5),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickOrderStatus(context);
+                },
+              ),
             ListTile(
               leading: Icon(Icons.notifications_off_outlined, color: kc.muted, size: 20),
               title: Text('Mute this chat', style: TextStyle(color: kc.text, fontSize: 14)),
@@ -173,26 +189,26 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
                 Navigator.of(context).pop();
                 try {
                   await ref.read(apiProvider).setMuted(widget.conversationId, true);
-                  if (context.mounted) showKwikSnack(context, 'Chat muted');
+                  if (mounted) showKwikSnack(context, 'Chat muted');
                 } catch (_) {
-                  if (context.mounted) showKwikSnack(context, 'Could not mute this chat', error: true);
+                  if (mounted) showKwikSnack(context, 'Could not mute this chat', error: true);
                 }
               },
             ),
             ListTile(
               leading: Icon(Icons.flag_outlined, color: kc.muted, size: 20),
               title: Text('Report this chat', style: TextStyle(color: kc.text, fontSize: 14)),
-              onTap: () async {
+              onTap: () {
                 Navigator.of(context).pop();
-                await _submitReport(context);
+                _submitReport(block: false);
               },
             ),
             ListTile(
               leading: Icon(Icons.block, color: kc.danger, size: 20),
               title: Text('Block and report', style: TextStyle(color: kc.danger, fontSize: 14)),
-              onTap: () async {
+              onTap: () {
                 Navigator.of(context).pop();
-                await _submitReport(context, block: true);
+                _submitReport(block: true);
               },
             ),
           ],
@@ -201,28 +217,85 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
     );
   }
 
-  Future<void> _submitReport(BuildContext context, {bool block = false}) async {
+  /// Vendors move an order along without leaving the chat — the whole point of
+  /// order tags is that the thread stays the source of truth.
+  Future<void> _pickOrderStatus(BuildContext context) async {
+    final kc = context.kc;
+    await showKwikSheet<void>(
+      context,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Order status', style: TextStyle(color: kc.text, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Only you see this as the vendor. Your customer sees it too once set.',
+              style: TextStyle(color: kc.muted, fontSize: 11.5),
+            ),
+            const SizedBox(height: 8),
+            for (final status in OrderStatus.values)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  status == OrderStatus.none ? 'Clear status' : orderStatusLabel(status),
+                  style: TextStyle(
+                    color: status == OrderStatus.none ? kc.muted : kc.text,
+                    fontSize: 14,
+                  ),
+                ),
+                trailing: _orderStatus == status ? Icon(Icons.check, color: kc.accent, size: 18) : null,
+                onTap: () async {
+                  final navigator = Navigator.of(context);
+                  try {
+                    await ref.read(apiProvider).setOrderStatus(widget.conversationId, status);
+                    if (!mounted) return;
+                    setState(() => _orderStatus = status);
+                    navigator.pop();
+                    showKwikSnack(
+                      context,
+                      status == OrderStatus.none ? 'Order status cleared' : 'Marked as ${orderStatusLabel(status)}',
+                    );
+                    ref.invalidate(chatListProvider);
+                  } on KwikError catch (e) {
+                    navigator.pop();
+                    if (mounted) showKwikSnack(context, e.message, error: true);
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitReport({required bool block}) async {
     final api = ref.read(apiProvider);
+    final handle = widget.title.replaceFirst('@', '').trim();
     try {
       await api.report(
         subjectType: 'conversation',
         subjectId: widget.conversationId,
         reason: block ? 'blocked_and_reported' : 'reported',
       );
-      if (block) {
-        final other = widget.title.replaceFirst('@', '');
-        if (other.isNotEmpty) {
-          // Resolve the handle to an id server-side in v0.2; the report is
-          // already filed either way.
-        }
+      if (block && handle.isNotEmpty) {
+        await api.blockByUsername(handle);
       }
-      if (context.mounted) {
+      ref.invalidate(chatListProvider);
+      if (!mounted) return;
+      if (block) {
+        showKwikSnack(context, '@$handle blocked and reported.');
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+      } else {
         showKwikSnack(context, 'Report sent. Our team reviews these within 24 hours.');
       }
-    } catch (e) {
-      if (context.mounted) {
-        showKwikSnack(context, e is KwikError ? e.message : 'Could not send report', error: true);
-      }
+    } on KwikError catch (e) {
+      if (mounted) showKwikSnack(context, e.message, error: true);
+    } catch (_) {
+      if (mounted) showKwikSnack(context, 'Could not send that. Try again.', error: true);
     }
   }
 }
